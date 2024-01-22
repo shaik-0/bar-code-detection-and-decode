@@ -1,0 +1,68 @@
+import os
+import argparse
+import pyzbar.pyzbar as pyzbar
+import cv2
+
+def preprocess(image_path):
+    # load and resize the image
+    image = cv2.imread(image_path)
+    image = cv2.resize(image, None, fx=0.7, fy=0.7, interpolation=cv2.INTER_CUBIC)
+
+    # convert to grayscale
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    # calculate x & y gradient
+    gradX = cv2.Sobel(gray, ddepth=cv2.CV_32F, dx=1, dy=0, ksize=-1)
+    gradY = cv2.Sobel(gray, ddepth=cv2.CV_32F, dx=0, dy=1, ksize=-1)
+
+    # subtract the y-gradient from the x-gradient and convert to absolute values
+    gradient = cv2.subtract(gradX, gradY)
+    gradient = cv2.convertScaleAbs(gradient)
+
+    # blur the image
+    blurred = cv2.blur(gradient, (3, 3))
+
+    # threshold the image
+    _, thresh = cv2.threshold(blurred, 225, 255, cv2.THRESH_BINARY)
+
+    return thresh
+
+def barcode(image):
+    # create a reader
+    scanner = pyzbar.ImageScanner()
+
+    # configure the reader
+    scanner.parse_config('enable')
+
+    # obtain image data
+    width, height = image.shape
+    raw = image.tobytes()
+
+    image = pyzbar.Image(width, height, 'Y800', raw)
+
+    # scan the image for barcodes
+    scanner.scan(image)
+
+    # extract results
+    for symbol in image:
+        print('format:', symbol.type, '| data:', '"%s"' % symbol.data.decode('utf-8'))
+
+    # clean up
+    print('-----------------------------------------------------------------------')
+
+def main():
+    ap = argparse.ArgumentParser()
+    # Updated help description
+    ap.add_argument("-i", "--image", required=True, help="Path to the image file")
+    args = vars(ap.parse_args())
+
+    image_path = args["image"]
+    if not os.path.exists(image_path):
+        print("The image file does not exist.")
+        return
+
+    preprocessed_image = preprocess(image_path)
+    barcode(preprocessed_image)
+
+if _name_ == "_main_":
+    main()
